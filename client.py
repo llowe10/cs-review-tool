@@ -16,21 +16,25 @@ def start_client(HOST, PORT):
         print(str(e))
 
     # prompt player for username
-    username = input("Enter username: ")
-    client.send(str.encode(username))
-
-    # connection successful
-    response = client.recv(2048).decode('utf-8')
-    print(response)
-
     while True:
-        message = input("Your message: ")
-        client.send(str.encode(message))
-        
-        response = client.recv(2048)
-        print(response.decode('utf-8'))
-        if not response.decode('utf-8'):
+        username = input("Enter username: ")
+        client.send(str.encode(username))
+        response = client.recv(2048).decode('utf-8')
+        print(response)
+
+        if response.startswith('Welcome'):
             break
+
+    # prompt player to create or join game
+    print("Do you want to create or join a game?")
+    while True:
+        choice = input("Enter C to create or J to join: ")
+        if choice == 'C' or choice == 'J':
+            client.send(str.encode(choice))
+            print(client.recv(2048).decode('utf-8'))
+            break
+        else:
+            print("Invalid input.\n")
 
     client.close()
 
