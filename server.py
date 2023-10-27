@@ -1,14 +1,21 @@
-# https://codesource.io/creating-python-socket-server-with-multiple-clients/
+# tutorial: https://codesource.io/creating-python-socket-server-with-multiple-clients/
+# chat room project: https://github.com/IamLucif3r/Chat-On
 
 import socket
 from _thread import *
 
 HOST = '127.0.0.1'
 PORT = 1891
-THREAD_COUNT = 0
+
+clients = []
+usernames = []
 
 def client_handler(connection):
-    connection.sendall(str.encode("You are now connected to the server... Type BYE to stop"))
+    # get username from client
+    username = connection.recv(2048).decode('utf-8')
+    connection.sendall(str.encode(f'Welcome to CS Review Tool, {username}!'))
+    clients.append(connection)
+    usernames.append(username)
 
     while True:
         data = connection.recv(2048)
