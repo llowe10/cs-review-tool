@@ -1,22 +1,57 @@
-# https://codesource.io/creating-python-socket-server-with-multiple-clients/
+# tutorial: https://codesource.io/creating-python-socket-server-with-multiple-clients/
+# chat room project: https://github.com/IamLucif3r/Chat-On
 
 import socket
 from _thread import *
+import random
+import sqlite3
 
 HOST = '127.0.0.1'
 PORT = 1891
-THREAD_COUNT = 0
+DATABASE_NAME = 'game.db'
+
+clients = []
+usernames = []
+sessions = []
+dbconnection = sqlite3.connect(DATABASE_NAME)
+
+def join_game(connection):
+    # list all available game session IDs
+    avail_sess = ""
+    for id in sessions:
+        avail_sess += (str(id) + "\n")
+    
+    connection.sendall(str.encode(f'Available games:\n{avail_sess}'))
+
+def create_game(connection):
+    # randomly generate session ID
+    while True:
+        id = random.randint(1000, 9999)
+        if id not in sessions:
+            sessions.append(id)
+            break
+    
+    connection.sendall(str.encode(f'New game created! Session ID: {id}\n'))
 
 def client_handler(connection):
-    connection.sendall(str.encode("You are now connected to the server... Type BYE to stop"))
-
+    # get player username
     while True:
-        data = connection.recv(2048)
-        message = data.decode('utf-8')
-        if message == "BYE":
+        username = connection.recv(2048).decode('utf-8')
+
+        if username not in usernames:
+            connection.sendall(str.encode(f'Welcome to CS Review Tool, {username}!\n'))
+            clients.append(connection)
+            usernames.append(username)
             break
-        reply = f'Server: {message}'
-        connection.sendall(str.encode(reply))
+        else:
+            connection.sendall(str.encode(f'User {username} already exists.'))
+    
+    # determine if player wants to create game or join game
+    choice = connection.recv(2048).decode('utf-8')
+    if choice == 'C':
+        create_game(connection)
+    else:
+        join_game(connection)
     
     connection.close()
 
@@ -35,8 +70,55 @@ def start_server(HOST, PORT):
     print(f'Server is listening on port {PORT}...')
     ss.listen()
 
+    load_questions()
+    get_questions()
+
     while True:
         accept_connections(ss)
+
+def load_questions():
+    try:
+        cursor = dbconnection.cursor()
+
+        drop_questions_table = 'DROP TABLE IF EXISTS QUESTIONS'
+        cursor.execute(drop_questions_table)
+
+        create_questions_table = """ CREATE TABLE QUESTIONS (
+                                    ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                                    Question VARCHAR(255) NOT NULL,
+                                    Difficulty VARCHAR(25) NOT NULL,
+                                    Points DOUBLE NOT NULL
+                                ); """
+        cursor.execute(create_questions_table)
+        print("* Questions database table created.")
+
+        cursor.execute('''INSERT INTO QUESTIONS (Question, Difficulty, Points) VALUES ('Question 1', 'Easy', '25.00')''')
+        cursor.execute('''INSERT INTO QUESTIONS (Question, Difficulty, Points) VALUES ('Question 2', 'Medium', '50.00')''')
+        cursor.execute('''INSERT INTO QUESTIONS (Question, Difficulty, Points) VALUES ('Question 3', 'Hard', '75.00')''')
+        print("* Questions loaded into database table.")
+
+        cursor.close()
+    except sqlite3.Error as error:
+        print('Error occurred - ', error)
+
+def get_questions():
+    try:
+        cursor = dbconnection.cursor()
+
+        get_questions = 'SELECT * FROM QUESTIONS;'
+        cursor.execute(get_questions)
+
+        questions = cursor.fetchall()
+        print('\nQuestions:')
+        for q in questions:
+            print(q)
+
+        cursor.close()
+    except sqlite3.Error as error:
+        print('Error occurred - ', error)
+    finally:
+        if dbconnection:
+            dbconnection.close()
 
 if __name__ == "__main__":
     start_server(HOST, PORT)
