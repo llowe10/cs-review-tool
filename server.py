@@ -13,17 +13,22 @@ usernames = []
 sessions = []
 
 def join_game(connection):
-    connection.sendall(b'DELETE -- in join_game')
+    # list all available game session IDs
+    avail_sess = ""
+    for id in sessions:
+        avail_sess += (str(id) + "\n")
+    
+    connection.sendall(str.encode(f'Available games:\n{avail_sess}'))
 
 def create_game(connection):
-    connection.sendall(b'DELETE -- in create_game')
-
     # randomly generate session ID
     while True:
         id = random.randint(1000, 9999)
         if id not in sessions:
             sessions.append(id)
             break
+    
+    connection.sendall(str.encode(f'New game created! Session ID: {id}\n'))
 
 def client_handler(connection):
     # get player username
