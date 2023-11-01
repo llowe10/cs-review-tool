@@ -4,13 +4,16 @@
 import socket
 from _thread import *
 import random
+import sqlite3
 
 HOST = '127.0.0.1'
 PORT = 1891
+DATABASE_NAME = 'game.db'
 
 clients = []
 usernames = []
 sessions = []
+dbconnection = sqlite3.connect(DATABASE_NAME)
 
 def join_game(connection):
     # list all available game session IDs
@@ -67,8 +70,55 @@ def start_server(HOST, PORT):
     print(f'Server is listening on port {PORT}...')
     ss.listen()
 
+    load_questions()
+    get_questions()
+
     while True:
         accept_connections(ss)
+
+def load_questions():
+    try:
+        cursor = dbconnection.cursor()
+
+        drop_questions_table = 'DROP TABLE IF EXISTS QUESTIONS'
+        cursor.execute(drop_questions_table)
+
+        create_questions_table = """ CREATE TABLE QUESTIONS (
+                                    ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                                    Question VARCHAR(255) NOT NULL,
+                                    Difficulty VARCHAR(25) NOT NULL,
+                                    Points DOUBLE NOT NULL
+                                ); """
+        cursor.execute(create_questions_table)
+        print("* Questions database table created.")
+
+        cursor.execute('''INSERT INTO QUESTIONS (Question, Difficulty, Points) VALUES ('Question 1', 'Easy', '25.00')''')
+        cursor.execute('''INSERT INTO QUESTIONS (Question, Difficulty, Points) VALUES ('Question 2', 'Medium', '50.00')''')
+        cursor.execute('''INSERT INTO QUESTIONS (Question, Difficulty, Points) VALUES ('Question 3', 'Hard', '75.00')''')
+        print("* Questions loaded into database table.")
+
+        cursor.close()
+    except sqlite3.Error as error:
+        print('Error occurred - ', error)
+
+def get_questions():
+    try:
+        cursor = dbconnection.cursor()
+
+        get_questions = 'SELECT * FROM QUESTIONS;'
+        cursor.execute(get_questions)
+
+        questions = cursor.fetchall()
+        print('\nQuestions:')
+        for q in questions:
+            print(q)
+
+        cursor.close()
+    except sqlite3.Error as error:
+        print('Error occurred - ', error)
+    finally:
+        if dbconnection:
+            dbconnection.close()
 
 if __name__ == "__main__":
     start_server(HOST, PORT)
