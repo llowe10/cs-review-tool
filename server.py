@@ -85,16 +85,22 @@ def load_questions():
 
         create_questions_table = """ CREATE TABLE QUESTIONS (
                                     ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                                    Topic VARCHAR(25) NOT NULL,
                                     Question VARCHAR(255) NOT NULL,
+                                    Choice_A VARCHAR(255) NOT NULL,
+                                    Choice_B VARCHAR(255) NOT NULL,
+                                    Choice_C VARCHAR(255) NOT NULL,
+                                    Choice_D VARCHAR(255) NOT NULL,
+                                    Answer VARCHAR(255) NOT NULL,
                                     Difficulty VARCHAR(25) NOT NULL,
                                     Points DOUBLE NOT NULL
                                 ); """
         cursor.execute(create_questions_table)
         print("* Questions database table created.")
 
-        cursor.execute('''INSERT INTO QUESTIONS (Question, Difficulty, Points) VALUES ('Question 1', 'Easy', '25.00')''')
-        cursor.execute('''INSERT INTO QUESTIONS (Question, Difficulty, Points) VALUES ('Question 2', 'Medium', '50.00')''')
-        cursor.execute('''INSERT INTO QUESTIONS (Question, Difficulty, Points) VALUES ('Question 3', 'Hard', '75.00')''')
+        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test', 'What is the answer to question 1?', 'A', 'B', 'C', 'D', 'Answer 1', 'Easy', '25.00')''')
+        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test', 'What is the answer to question 2?', 'A', 'B', 'C', 'D', 'Answer 2', 'Medium', '50.00')''')
+        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test', 'What is the answer to question 3?', 'A', 'B', 'C', 'D', 'Answer 3', 'Hard', '75.00')''')
         print("* Questions loaded into database table.")
 
         cursor.close()
