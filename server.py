@@ -10,22 +10,54 @@ PORT = 1891
 
 clients = []
 usernames = []
-sessions = []
+topics = []
+sessions = {} # {id: topic}
 
 def join_game(connection):
-    # list all available game session IDs
+    id = None
+
+    # list all available game session IDs and topics
     avail_sess = ""
     for id in sessions:
-        avail_sess += (str(id) + "\n")
-    
+        avail_sess += (str(id) + " -- " + sessions[id] + "\n")
     connection.sendall(str.encode(f'Available games:\n{avail_sess}'))
 
+    # capture game session ID from client
+    while True:
+        id = int(connection.recv(2048).decode('utf-8'))
+        if id not in sessions:
+            connection.sendall(str.encode(f'Game {id} does not exist.\n'))
+        else:
+            break
+    
+    connection.sendall(str.encode(f'Joining game {id}...\n'))
+
 def create_game(connection):
+    id = None
+    topic = None
+
+    # TODO: get available topics from database
+    topics.append('TBD')
+
+    # list available game topics to client
+    avail_top = ""
+    for top in topics:
+        avail_top += (top + "\n")
+    connection.sendall(str.encode(f'Available topics:\n{avail_top}'))
+
+    # capture game topic from client
+    while True:
+        topic = connection.recv(2048).decode('utf-8')
+        if topic not in topics:
+            connection.sendall(str.encode(f'Topic \'{topic}\' does not exist.\n'))
+        else:
+            break
+
     # randomly generate session ID
     while True:
         id = random.randint(1000, 9999)
         if id not in sessions:
-            sessions.append(id)
+            sessions[id] = topic
             break
     
     connection.sendall(str.encode(f'New game created! Session ID: {id}\n'))

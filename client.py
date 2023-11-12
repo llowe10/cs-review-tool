@@ -32,6 +32,23 @@ def start_client(HOST, PORT):
         if choice == 'C' or choice == 'J':
             client.send(str.encode(choice))
             print(client.recv(2048).decode('utf-8'))
+
+            if choice == 'C':
+                while True:
+                    topic = input("Choose a topic: ")
+                    client.send(str.encode(topic))
+                    response = client.recv(2048).decode('utf-8')
+                    print(response)
+                    if response.startswith('New game'):
+                        break
+            else:
+                while True:
+                    id = input("Choose a game ID: ")
+                    client.send(str.encode(str(id)))
+                    response = client.recv(2048).decode('utf-8')
+                    print(response)
+                    if response.startswith('Joining'):
+                        break
             break
         else:
             print("Invalid input.\n")
