@@ -118,6 +118,7 @@ def get_questions():
         print('\nQuestions:')
         for q in questions:
             print(q)
+        print()
 
         cursor.close()
     except sqlite3.Error as error:
