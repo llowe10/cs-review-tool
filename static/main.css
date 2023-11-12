@@ -1,0 +1,40 @@
+body {
+    padding: 30px 30px;
+    background-color: #c7c7c7;
+}
+
+h1 {
+    color:black;
+    text-align: center;
+    font-family:'Courier New', Courier, monospace;
+}
+
+h2 {
+    color:black;
+    font-family:'Courier New', Courier, monospace;
+}
+
+ul {
+    display: block;
+    color: black;
+    text-align: center;
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #c7c7c7;
+}
+
+li {
+    float: left;
+    font-family:'Courier New', Courier, monospace;
+    padding: 10px 10px;
+}
+
+p {
+    color: black;
+}
+
+div .form-field {
+    color: black;
+}
