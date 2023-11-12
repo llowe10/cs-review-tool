@@ -7,15 +7,19 @@ import random
 
 HOST = '127.0.0.1'
 PORT = 1891
+QUESTION_LIMIT = 10
 
 clients = []
 usernames = []
 topics = []
-sessions = {} # {id: topic}
+
+sessions = {} # {game ID: topic}
+gameRooms = {} # {game ID: [player connections]}
+
+scores = {} # (player username: score)
+responseQueue = [] # (connection, response)
 
 def join_game(connection):
-    id = None
-
     # list all available game session IDs and topics
     avail_sess = ""
     for id in sessions:
@@ -23,19 +27,17 @@ def join_game(connection):
     connection.sendall(str.encode(f'Available games:\n{avail_sess}'))
 
     # capture game session ID from client
+    id = None
     while True:
         id = int(connection.recv(2048).decode('utf-8'))
         if id not in sessions:
             connection.sendall(str.encode(f'Game {id} does not exist.\n'))
         else:
+            connection.sendall(str.encode(f'Joining game {id}...\n'))
+            gameRooms[id].append(connection)
             break
-    
-    connection.sendall(str.encode(f'Joining game {id}...\n'))
 
 def create_game(connection):
-    id = None
-    topic = None
-
     # TODO: get available topics from database
     topics.append('TBD')
 
@@ -46,6 +48,7 @@ def create_game(connection):
     connection.sendall(str.encode(f'Available topics:\n{avail_top}'))
 
     # capture game topic from client
+    topic = None
     while True:
         topic = connection.recv(2048).decode('utf-8')
         if topic not in topics:
@@ -54,19 +57,45 @@ def create_game(connection):
             break
 
     # randomly generate session ID
+    id = None
     while True:
         id = random.randint(1000, 9999)
         if id not in sessions:
             sessions[id] = topic
+            connection.sendall(str.encode(f'New game created! Session ID: {id}\n'))
+            gameRooms[id] = []
             break
     
-    connection.sendall(str.encode(f'New game created! Session ID: {id}\n'))
+    # TODO: send out questions to users in game room
+    for i in range(QUESTION_LIMIT):
+        # broadcast question to users
+
+        correctAnswer = None # get answer from database
+        answerPoints = -1 # get points from database
+
+        bonusGiven = 0 # bonus given to first 3 players to respond correctly
+        for tup in responseQueue:
+            if tup[1] == correctAnswer:
+                scores[tup[0]] += answerPoints
+
+                if bonusGiven < 3:
+                    if bonusGiven == 0:
+                        scores[tup[0]] += 100
+                    elif bonusGiven == 1:
+                        scores[tup[0]] += 75
+                    else:
+                        scores[tup[0]] += 50
+                    bonusGiven += 1
+        
+        # broadcast correct answer to players
+
+        # broadcast scoreboard to players
+        break
 
 def client_handler(connection):
     # get player username
     while True:
         username = connection.recv(2048).decode('utf-8')
-
         if username not in usernames:
             connection.sendall(str.encode(f'Welcome to CS Review Tool, {username}!\n'))
             clients.append(connection)
