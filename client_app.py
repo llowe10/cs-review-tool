@@ -3,9 +3,6 @@
 
 import socket
 
-# HOST = '127.0.0.1'
-# PORT = 1891
-
 class Client():
     def __init__(self) -> None:
         self.client = socket.socket()

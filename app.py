@@ -4,7 +4,7 @@ from flask import Flask, jsonify, request, render_template, redirect, url_for
 
 GAME_SERVER_HOST = '127.0.0.1'
 GAME_SERVER_PORT = 1891
-# client = socket.socket()
+clients = []
 
 # Creating the Web Application
 app = Flask(__name__)
@@ -30,9 +30,11 @@ def start():
     client = Client()
     client.start_client(GAME_SERVER_HOST, GAME_SERVER_PORT)
     client.set_username()
+    clients.append(client)
 
     response = {
         "message": "Successfully started game client.",
+        "clients": f"{clients}",
         "tester": "llowe10"
     }
 
