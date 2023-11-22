@@ -4,14 +4,19 @@
 import socket
 from _thread import *
 import random
+import sqlite3
 
 HOST = '127.0.0.1'
 PORT = 1891
+
 QUESTION_LIMIT = 10
+DATABASE_NAME = 'game.db'
 
 clients = []
 usernames = []
+sessions = []
 topics = []
+dbconnection = sqlite3.connect(DATABASE_NAME)
 
 sessions = {} # {game ID: topic}
 gameRooms = {} # {game ID: [(username, player connection)]}
@@ -166,8 +171,62 @@ def start_server(HOST, PORT):
     print(f'Server is listening on port {PORT}...')
     ss.listen()
 
+    load_questions()
+    get_questions()
+
     while True:
         accept_connections(ss)
+
+def load_questions():
+    try:
+        cursor = dbconnection.cursor()
+
+        drop_questions_table = 'DROP TABLE IF EXISTS QUESTIONS'
+        cursor.execute(drop_questions_table)
+
+        create_questions_table = """ CREATE TABLE QUESTIONS (
+                                    ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                                    Topic VARCHAR(25) NOT NULL,
+                                    Question VARCHAR(255) NOT NULL,
+                                    Choice_A VARCHAR(255) NOT NULL,
+                                    Choice_B VARCHAR(255) NOT NULL,
+                                    Choice_C VARCHAR(255) NOT NULL,
+                                    Choice_D VARCHAR(255) NOT NULL,
+                                    Answer VARCHAR(255) NOT NULL,
+                                    Difficulty VARCHAR(25) NOT NULL,
+                                    Points DOUBLE NOT NULL
+                                ); """
+        cursor.execute(create_questions_table)
+        print("* Questions database table created.")
+
+        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test', 'What is the answer to question 1?', 'A', 'B', 'C', 'D', 'Answer 1', 'Easy', '25.00')''')
+        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test', 'What is the answer to question 2?', 'A', 'B', 'C', 'D', 'Answer 2', 'Medium', '50.00')''')
+        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test', 'What is the answer to question 3?', 'A', 'B', 'C', 'D', 'Answer 3', 'Hard', '75.00')''')
+        print("* Questions loaded into database table.")
+
+        cursor.close()
+    except sqlite3.Error as error:
+        print('Error occurred - ', error)
+
+def get_questions():
+    try:
+        cursor = dbconnection.cursor()
+
+        get_questions = 'SELECT * FROM QUESTIONS;'
+        cursor.execute(get_questions)
+
+        questions = cursor.fetchall()
+        print('\nQuestions:')
+        for q in questions:
+            print(q)
+        print()
+
+        cursor.close()
+    except sqlite3.Error as error:
+        print('Error occurred - ', error)
+    finally:
+        if dbconnection:
+            dbconnection.close()
 
 if __name__ == "__main__":
     start_server(HOST, PORT)
