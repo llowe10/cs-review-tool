@@ -2,9 +2,16 @@
 # chat room project: https://github.com/IamLucif3r/Chat-On
 
 import socket
+import time
 
 HOST = '127.0.0.1'
 PORT = 1891
+
+def administrator(client):
+    print(client.recv(2048).decode('utf-8'))
+    time.sleep(60)
+    response = input("Enter 'Y' to start the game: ")
+    client.send(str.encode(response))
 
 def start_client(HOST, PORT):
     client = socket.socket()
@@ -40,7 +47,7 @@ def start_client(HOST, PORT):
                     response = client.recv(2048).decode('utf-8')
                     print(response)
                     if response.startswith('New game'):
-                        break
+                        administrator(client)
             else:
                 while True:
                     id = input("Choose a game ID: ")

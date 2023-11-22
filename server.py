@@ -14,12 +14,12 @@ usernames = []
 topics = []
 
 sessions = {} # {game ID: topic}
-gameRooms = {} # {game ID: [player connections]}
+gameRooms = {} # {game ID: [(username, player connection)]}
 
-scores = {} # (player username: score)
+scores = {} # {player username: score}
 responseQueue = [] # (connection, response)
 
-def join_game(connection):
+def join_game(connection, username):
     # list all available game session IDs and topics
     avail_sess = ""
     for id in sessions:
@@ -27,19 +27,79 @@ def join_game(connection):
     connection.sendall(str.encode(f'Available games:\n{avail_sess}'))
 
     # capture game session ID from client
-    id = None
     while True:
         id = int(connection.recv(2048).decode('utf-8'))
         if id not in sessions:
             connection.sendall(str.encode(f'Game {id} does not exist.\n'))
         else:
             connection.sendall(str.encode(f'Joining game {id}...\n'))
-            gameRooms[id].append(connection)
+            gameRooms[id].append((username, connection))
             break
+
+def get_scoreboard():
+    rankings = sorted(scores.items(), key = lambda x: x[1])
+    
+    scoreboard = "SCOREBOARD".center(30, " ")
+    scoreboard += "\nPLAYER".ljust(15, " ")
+    scoreboard += "SCORE".rjust(15, " ")
+    scoreboard += "\n"
+
+    rank = 1
+    for tup in rankings:
+        result = "{:<10} {:>15}".format(tup[0], tup[1])
+        scoreboard += (str(rank) + ". " + result + "\n")
+        rank += 1
+    
+    return scoreboard
+
+def administrate_game(connection, id):
+    # initalize all player scores to 0
+    players_list = gameRooms[id]
+    for tup in players_list:
+        scores[tup[0]] = 0
+
+    # TODO: get questions from database
+    questions = ['question1', 'question2', 'question3']
+
+    # TODO: send out questions to users in game room
+    for q in questions:
+        # broadcast question to users
+        connection.sendall(str.encode(q))
+
+        # TODO: get answer from database
+        correctAnswer = 'answer'
+
+        # TODO: get points from database
+        answerPoints = 1
+
+        # bonus given to first 3 players to respond correctly
+        bonusGiven = 0
+        for tup in responseQueue:
+            if tup[1] == correctAnswer:
+                scores[tup[0]] += answerPoints
+
+                if bonusGiven < 3:
+                    if bonusGiven == 0:
+                        scores[tup[0]] += 100
+                    elif bonusGiven == 1:
+                        scores[tup[0]] += 75
+                    else:
+                        scores[tup[0]] += 50
+                    bonusGiven += 1
+        
+        # broadcast correct answer to players
+        connection.sendall(str.encode(correctAnswer))
+
+        # broadcast scoreboard to players
+        connection.sendall(str.encode(get_scoreboard))
+    
+    # TODO: account for users leaving the session
+
+    # TODO: determine what to do once game ends
 
 def create_game(connection):
     # TODO: get available topics from database
-    topics.append('TBD')
+    topics = ['TBD']
 
     # list available game topics to client
     avail_top = ""
@@ -48,7 +108,6 @@ def create_game(connection):
     connection.sendall(str.encode(f'Available topics:\n{avail_top}'))
 
     # capture game topic from client
-    topic = None
     while True:
         topic = connection.recv(2048).decode('utf-8')
         if topic not in topics:
@@ -66,31 +125,10 @@ def create_game(connection):
             gameRooms[id] = []
             break
     
-    # TODO: send out questions to users in game room
-    for i in range(QUESTION_LIMIT):
-        # broadcast question to users
-
-        correctAnswer = None # get answer from database
-        answerPoints = -1 # get points from database
-
-        bonusGiven = 0 # bonus given to first 3 players to respond correctly
-        for tup in responseQueue:
-            if tup[1] == correctAnswer:
-                scores[tup[0]] += answerPoints
-
-                if bonusGiven < 3:
-                    if bonusGiven == 0:
-                        scores[tup[0]] += 100
-                    elif bonusGiven == 1:
-                        scores[tup[0]] += 75
-                    else:
-                        scores[tup[0]] += 50
-                    bonusGiven += 1
-        
-        # broadcast correct answer to players
-
-        # broadcast scoreboard to players
-        break
+    connection.sendall(str.encode(f'Waiting for players to join...'))
+    confirmation = connection.recv(2048).decode('utf-8')
+    if confirmation == 'Y':
+        administrate_game(connection, id)
 
 def client_handler(connection):
     # get player username
@@ -109,7 +147,7 @@ def client_handler(connection):
     if choice == 'C':
         create_game(connection)
     else:
-        join_game(connection)
+        join_game(connection, username)
     
     connection.close()
 
