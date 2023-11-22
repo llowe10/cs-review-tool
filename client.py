@@ -2,9 +2,16 @@
 # chat room project: https://github.com/IamLucif3r/Chat-On
 
 import socket
+import time
 
 HOST = '127.0.0.1'
 PORT = 1891
+
+def administrator(client):
+    print(client.recv(2048).decode('utf-8'))
+    time.sleep(60)
+    response = input("Enter 'Y' to start the game: ")
+    client.send(str.encode(response))
 
 def start_client(HOST, PORT):
     client = socket.socket()
@@ -32,6 +39,23 @@ def start_client(HOST, PORT):
         if choice == 'C' or choice == 'J':
             client.send(str.encode(choice))
             print(client.recv(2048).decode('utf-8'))
+
+            if choice == 'C':
+                while True:
+                    topic = input("Choose a topic: ")
+                    client.send(str.encode(topic))
+                    response = client.recv(2048).decode('utf-8')
+                    print(response)
+                    if response.startswith('New game'):
+                        administrator(client)
+            else:
+                while True:
+                    id = input("Choose a game ID: ")
+                    client.send(str.encode(str(id)))
+                    response = client.recv(2048).decode('utf-8')
+                    print(response)
+                    if response.startswith('Joining'):
+                        break
             break
         else:
             print("Invalid input.\n")
