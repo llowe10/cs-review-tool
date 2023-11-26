@@ -21,7 +21,7 @@ sessions = {} # {game ID: topic}
 gameRooms = {} # {game ID: [(username, player connection)]}
 
 scores = {} # {player username: score}
-responseQueue = [] # (player username, response)
+responseQueue = [] # [(player username, response)]
 
 def join_game(connection, username):
     # list all available game session IDs and topics
@@ -56,12 +56,12 @@ def get_scoreboard():
     
     return scoreboard
 
-def administrate_game(connection, id):
+def administrate_game(connection, gameID):
     try:
         cursor = dbconnection.cursor()
 
         # initalize all player scores to 0
-        playersList = gameRooms[id]
+        playersList = gameRooms[gameID]
         for tup in playersList:
             scores[tup[0]] = 0
 
@@ -70,7 +70,7 @@ def administrate_game(connection, id):
         choices = []
         answers = []
         points = []
-        topic = sessions[id]
+        topic = sessions[gameID]
         query = f""" SELECT
                 Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Points
                 FROM QUESTIONS WHERE Topic = \'{topic}\';
@@ -109,10 +109,43 @@ def administrate_game(connection, id):
 
             # broadcast scoreboard to players
             connection.sendall(str.encode(get_scoreboard()))
+        
+            """
+            for tup in gameRooms[gameID]:
+                # send update to administrator
+                connection.sendall(str.encode(f'Question {i}'))
+
+                # broadcast question and answer choices to users
+                tup[1].sendall(str.encode(f'Question {i}: ' + questions[i]))
+                tup[1].sendall(str.encode(choices[i]))
+
+                # bonus given to first 3 players to respond correctly
+                bonusGiven = 0
+                for tup in responseQueue:
+                    if tup[1] == answers[i]:
+                        scores[tup[0]] += points[i]
+
+                        if bonusGiven < 3:
+                            if bonusGiven == 0:
+                                scores[tup[0]] += 100
+                            elif bonusGiven == 1:
+                                scores[tup[0]] += 75
+                            else:
+                                scores[tup[0]] += 50
+                            bonusGiven += 1
+                
+                # broadcast correct answer to players
+                tup[1].sendall(str.encode(answers[i]))
+
+                # broadcast scoreboard to players and administrator
+                tup[1].sendall(str.encode(get_scoreboard()))
+                connection.sendall(str.encode(get_scoreboard()))
+            """
 
         # TODO: account for users leaving the session
 
         # TODO: determine what to do once game ends
+        connection.sendall(str.encode("Game has ended."))
 
         cursor.close()
     except sqlite3.Error as error:
