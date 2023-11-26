@@ -7,11 +7,25 @@ import time
 HOST = '127.0.0.1'
 PORT = 1891
 
+def player(client):
+    pass
+
 def administrator(client):
+    # waiting for game to start
     print(client.recv(2048).decode('utf-8'))
-    time.sleep(60)
+    time.sleep(30)
     response = input("Enter 'Y' to start the game: ")
     client.send(str.encode(response))
+
+    # sending updates as game progresses
+    while True:
+        update = client.recv(2048).decode('utf-8')
+        print(update)
+        if update.startswith('Game'):
+            break
+        else:
+            update = client.recv(2048).decode('utf-8')
+            print(update)
 
 def start_client(HOST, PORT):
     client = socket.socket()
@@ -48,6 +62,7 @@ def start_client(HOST, PORT):
                     print(response)
                     if response.startswith('New game'):
                         administrator(client)
+                        break
             else:
                 while True:
                     id = input("Choose a game ID: ")
@@ -55,6 +70,7 @@ def start_client(HOST, PORT):
                     response = client.recv(2048).decode('utf-8')
                     print(response)
                     if response.startswith('Joining'):
+                        player(client)
                         break
             break
         else:

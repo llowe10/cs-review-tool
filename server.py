@@ -8,7 +8,6 @@ import sqlite3
 
 HOST = '127.0.0.1'
 PORT = 1891
-
 QUESTION_LIMIT = 10
 DATABASE_NAME = 'game.db'
 
@@ -16,13 +15,13 @@ clients = []
 usernames = []
 sessions = []
 topics = []
-dbconnection = sqlite3.connect(DATABASE_NAME)
+dbconnection = sqlite3.connect(DATABASE_NAME, check_same_thread = False)
 
 sessions = {} # {game ID: topic}
 gameRooms = {} # {game ID: [(username, player connection)]}
 
 scores = {} # {player username: score}
-responseQueue = [] # (connection, response)
+responseQueue = [] # [(player username, response)]
 
 def join_game(connection, username):
     # list all available game session IDs and topics
@@ -57,83 +56,143 @@ def get_scoreboard():
     
     return scoreboard
 
-def administrate_game(connection, id):
-    # initalize all player scores to 0
-    players_list = gameRooms[id]
-    for tup in players_list:
-        scores[tup[0]] = 0
+def administrate_game(connection, gameID):
+    try:
+        cursor = dbconnection.cursor()
 
-    # TODO: get questions from database
-    questions = ['question1', 'question2', 'question3']
+        # initalize all player scores to 0
+        playersList = gameRooms[gameID]
+        for tup in playersList:
+            scores[tup[0]] = 0
 
-    # TODO: send out questions to users in game room
-    for q in questions:
-        # broadcast question to users
-        connection.sendall(str.encode(q))
-
-        # TODO: get answer from database
-        correctAnswer = 'answer'
-
-        # TODO: get points from database
-        answerPoints = 1
-
-        # bonus given to first 3 players to respond correctly
-        bonusGiven = 0
-        for tup in responseQueue:
-            if tup[1] == correctAnswer:
-                scores[tup[0]] += answerPoints
-
-                if bonusGiven < 3:
-                    if bonusGiven == 0:
-                        scores[tup[0]] += 100
-                    elif bonusGiven == 1:
-                        scores[tup[0]] += 75
-                    else:
-                        scores[tup[0]] += 50
-                    bonusGiven += 1
+        # get questions and related info
+        questions = []
+        choices = []
+        answers = []
+        points = []
+        topic = sessions[gameID]
+        query = f""" SELECT
+                Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Points
+                FROM QUESTIONS WHERE Topic = \'{topic}\';
+                """
+        cursor.execute(query)
+        result = cursor.fetchall()
+        for tup in result:
+            questions.append(tup[0])
+            choices.append(tup[1] + "\n" + tup[2] + "\n" + tup[3] + "\n" + tup[4] + "\n")
+            answers.append(tup[5])
+            points.append(tup[6])
         
-        # broadcast correct answer to players
-        connection.sendall(str.encode(correctAnswer))
+        # send out questions to users in game room
+        for i in range(1, QUESTION_LIMIT + 1):
+            # broadcast question and answer choices to users
+            connection.sendall(str.encode(f'Question {i}: ' + questions[i]))
+            connection.sendall(str.encode(choices[i]))
 
-        # broadcast scoreboard to players
-        connection.sendall(str.encode(get_scoreboard))
-    
-    # TODO: account for users leaving the session
+            # bonus given to first 3 players to respond correctly
+            bonusGiven = 0
+            for tup in responseQueue:
+                if tup[1] == answers[i]:
+                    scores[tup[0]] += points[i]
 
-    # TODO: determine what to do once game ends
+                    if bonusGiven < 3:
+                        if bonusGiven == 0:
+                            scores[tup[0]] += 100
+                        elif bonusGiven == 1:
+                            scores[tup[0]] += 75
+                        else:
+                            scores[tup[0]] += 50
+                        bonusGiven += 1
+
+            # broadcast correct answer to players
+            connection.sendall(str.encode(answers[i]))
+
+            # broadcast scoreboard to players
+            connection.sendall(str.encode(get_scoreboard()))
+        
+            """
+            for tup in gameRooms[gameID]:
+                # send update to administrator
+                connection.sendall(str.encode(f'Question {i}'))
+
+                # broadcast question and answer choices to users
+                tup[1].sendall(str.encode(f'Question {i}: ' + questions[i]))
+                tup[1].sendall(str.encode(choices[i]))
+
+                # bonus given to first 3 players to respond correctly
+                bonusGiven = 0
+                for tup in responseQueue:
+                    if tup[1] == answers[i]:
+                        scores[tup[0]] += points[i]
+
+                        if bonusGiven < 3:
+                            if bonusGiven == 0:
+                                scores[tup[0]] += 100
+                            elif bonusGiven == 1:
+                                scores[tup[0]] += 75
+                            else:
+                                scores[tup[0]] += 50
+                            bonusGiven += 1
+                
+                # broadcast correct answer to players
+                tup[1].sendall(str.encode(answers[i]))
+
+                # broadcast scoreboard to players and administrator
+                tup[1].sendall(str.encode(get_scoreboard()))
+                connection.sendall(str.encode(get_scoreboard()))
+            """
+
+        # TODO: account for users leaving the session
+
+        # TODO: determine what to do once game ends
+        connection.sendall(str.encode("Game has ended."))
+
+        cursor.close()
+    except sqlite3.Error as error:
+        print('Error occurred - ', error)
 
 def create_game(connection):
-    # TODO: get available topics from database
-    topics = ['TBD']
+    try:
+        cursor = dbconnection.cursor()
 
-    # list available game topics to client
-    avail_top = ""
-    for top in topics:
-        avail_top += (top + "\n")
-    connection.sendall(str.encode(f'Available topics:\n{avail_top}'))
+        # get available topics
+        cursor.execute("SELECT Topic FROM QUESTIONS;")
+        result = cursor.fetchall()
+        for tup in result:
+            topics.append(tup[0])
 
-    # capture game topic from client
-    while True:
-        topic = connection.recv(2048).decode('utf-8')
-        if topic not in topics:
-            connection.sendall(str.encode(f'Topic \'{topic}\' does not exist.\n'))
-        else:
-            break
+        # list available game topics to client
+        avail_topics = ""
+        for top in topics:
+            avail_topics += (top + "\n")
+        connection.sendall(str.encode(f'Available topics:\n{avail_topics}'))
 
-    # randomly generate session ID
-    id = None
-    while True:
-        id = random.randint(1000, 9999)
-        if id not in sessions:
-            sessions[id] = topic
-            connection.sendall(str.encode(f'New game created! Session ID: {id}\n'))
-            gameRooms[id] = []
-            break
-    
-    connection.sendall(str.encode(f'Waiting for players to join...'))
-    confirmation = connection.recv(2048).decode('utf-8')
-    if confirmation == 'Y':
-        administrate_game(connection, id)
+        # capture game topic from client
+        while True:
+            topic = connection.recv(2048).decode('utf-8')
+            if topic not in topics:
+                connection.sendall(str.encode(f'Topic \'{topic}\' does not exist.\n'))
+            else:
+                break
+        
+        # randomly generate session ID
+        id = None
+        while True:
+            id = random.randint(1000, 9999)
+            if id not in sessions:
+                sessions[id] = topic
+                connection.sendall(str.encode(f'New game created! Session ID: {id}\n'))
+                gameRooms[id] = []
+                break
+        
+        connection.sendall(str.encode(f'Waiting for players to join...'))
+        confirmation = connection.recv(2048).decode('utf-8')
+        if confirmation == 'Y':
+            administrate_game(connection, id)
+        
+        cursor.close()
+    except sqlite3.Error as error:
+        print('Error occurred - ', error)
 
 def client_handler(connection):
     # get player username
@@ -172,7 +231,7 @@ def start_server(HOST, PORT):
     ss.listen()
 
     load_questions()
-    get_questions()
+    # get_questions()
 
     while True:
         accept_connections(ss)
