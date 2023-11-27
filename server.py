@@ -5,6 +5,7 @@ import socket
 from _thread import *
 import random
 import sqlite3
+import time
 
 HOST = '127.0.0.1'
 PORT = 1891
@@ -13,13 +14,12 @@ DATABASE_NAME = 'game.db'
 
 clients = [] # [client objects]
 usernames = [] # [client usernames]
-sessions = [] # [game session IDs]
-topics = [] # [game topics]
 dbconnection = sqlite3.connect(DATABASE_NAME, check_same_thread = False)
 
-sessions = {} # {game ID: topic}
+topics = [] # [game topics]
+games = {} # {game ID: topic}
 gameRooms = {} # {game ID: [client objects for each player]}
-
+gamesInSession = [] # [game IDs for games currently in session]
 scores = {} # {player username: score}
 responseQueue = [] # [(player username, response)]
 
@@ -42,30 +42,71 @@ class Client:
     def getGameID(self):
         return self.gameID
 
-def join_game(player: Client):
+def play_game(player: Client):
+    responseMutex = allocate_lock()
+    confirmationMutex = allocate_lock()
+    connection = player.getConnection()
+    username = player.getUsername()
+    gameID = player.getGameID()
+
+    # wait until game has started
+    while gameID not in gamesInSession:
+        time.sleep(0.1)
+
+    # game has started
+    while gameID in gamesInSession:
+        while responseMutex.locked():
+            time.sleep(0.1)
+        
+        # get responses from player (one player at a time)
+        responseMutex.acquire()
+        connection.sendall(str.encode("What's your answer?"))
+        response = connection.recv(2048).decode('utf-8')
+        responseQueue.append((username, response))
+        responseMutex.release()
+
+        # check if player wants to continue
+        confirmationMutex.acquire()
+        connection.sendall(str.encode("Do you want to continue?"))
+        confirmation = connection.recv(2048).decode('utf-8')
+        if confirmation != 'Y':
+            player.setGameID(None)
+            gameRooms[gameID].remove(player)
+            del scores[username]
+        confirmationMutex.release()
+
+def join_game(player: Client, games: dict):
     connection = player.getConnection()
 
-    if len(sessions) == 0:
+    if len(games) == 0:
         connection.sendall(str.encode("No current games available."))
+        clients.remove(player)
     else:
         # list all available game session IDs and topics
-        availSess = ""
-        for id in sessions:
-            availSess += (str(id) + " -- " + sessions[id] + "\n")
-        connection.sendall(str.encode(f'Available games:\n{availSess}'))
+        availGames = ""
+        for id in games:
+            # ensure that games only contains games not in session
+            if id not in gamesInSession:
+                availGames += (str(id) + " -- " + games[id] + "\n")
+            else:
+                del games[id]
+        connection.sendall(str.encode(f'Available games:\n{availGames}'))
 
         # capture game session ID
         while True:
             id = int(connection.recv(2048).decode('utf-8'))
-            if id not in sessions:
+            if id not in games:
                 connection.sendall(str.encode(f'Game {id} does not exist.\n'))
             else:
                 connection.sendall(str.encode(f'Joining game {id}...\n'))
                 gameRooms[id].append(player)
                 break
+        
+        play_game(player)
 
 def get_scoreboard():
-    rankings = sorted(scores.items(), key = lambda x: x[1])
+    # sort scoreboard from highest to lowest score
+    rankings = sorted(scores.items(), key = lambda x: x[1], reverse = True)
     
     scoreboard = "SCOREBOARD".center(30, " ")
     scoreboard += "\nPLAYER".ljust(15, " ")
@@ -98,7 +139,7 @@ def administrate_game(admin: Client):
         answerChoices = []
         correctAnswers = []
         points = []
-        topic = sessions[gameID]
+        topic = games[gameID]
         query = f"""SELECT
                 Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Points
                 FROM QUESTIONS WHERE Topic = \'{topic}\';"""
@@ -108,30 +149,42 @@ def administrate_game(admin: Client):
             questions.append(tup[0])
             answerChoices.append(tup[1] + "\n" + tup[2] + "\n" + tup[3] + "\n" + tup[4] + "\n")
             correctAnswers.append(tup[5])
-            points.append(tup[6])
+            points.append(float(tup[6]))
+        
+        # game now in session
+        gamesInSession.append(gameID)
+        del games[gameID]
         
         # send out game content to players
-        for i in range(1, QUESTION_LIMIT + 1):
-            question = question[i]
+        for i in range(0, QUESTION_LIMIT):
+            if i >= len(questions): # delete later
+                break
+
+            question = questions[i]
             choices = answerChoices[i]
             answer = correctAnswers[i]
+            pts = points[i]
 
             # send update to admin
-            adminConn.sendall(str.encode(f'Question {i}: ' + question))
+            adminConn.sendall(str.encode(f'Question {i+1}: ' + question))
 
             # broadcast question and answer choices
-            for i in range(len(playersList)):
-                player: Client = playersList[i]
+            for j in range(len(playersList)):
+                player: Client = playersList[j]
                 playerConn = player.getConnection()
 
-                playerConn.sendall(str.encode(f'Question {i}: ' + question))
+                playerConn.sendall(str.encode(f'Question {i+1}: ' + question))
                 playerConn.sendall(str.encode(choices))
+            
+            # wait for responses
+            adminConn.sendall(str.encode("Waiting for responses..."))
+            time.sleep(30)
 
             # bonus given to first 3 players to respond correctly
             bonusGiven = 0
             for tup in responseQueue:
                 if tup[1] == answer:
-                    scores[tup[0]] += points[i]
+                    scores[tup[0]] += pts
 
                     if bonusGiven < 3:
                         if bonusGiven == 0:
@@ -150,11 +203,13 @@ def administrate_game(admin: Client):
                 playerConn.sendall(str.encode(answer))
                 playerConn.sendall(str.encode(get_scoreboard()))
             
-            # TODO: account for users leaving the session
+            # TODO: account for users leaving the game
 
-            # TODO: determine what to do once game ends
+        # TODO: determine what to do once game ends
+        gamesInSession.remove(gameID)
+        adminConn.sendall(str.encode("GAME OVER"))
             
-            cursor.close()
+        cursor.close()
     except sqlite3.Error as error:
         print("Error occurred -", error)
 
@@ -184,16 +239,16 @@ def create_game(client: Client):
                 break
         
         # randomly generate session ID
-        id = None
         while True:
             id = random.randint(1000, 9999)
-            if id not in sessions:
-                sessions[id] = topic
+            if id not in games:
+                games[id] = topic
                 connection.sendall(str.encode(f'New game created! Session ID: {id}\n'))
                 gameRooms[id] = []
                 client.setGameID(id)
                 break
         
+        # start game once administrator confirms
         connection.sendall(str.encode(f'Waiting for players to join...'))
         confirmation = connection.recv(2048).decode('utf-8')
         if confirmation == 'Y':
@@ -222,7 +277,7 @@ def client_handler(connection, address):
     if choice == 'C':
         create_game(client)
     else:
-        join_game(client)
+        join_game(client, games)
     
     connection.close()
 
@@ -269,9 +324,9 @@ def load_questions():
         cursor.execute(create_questions_table)
         print("* Questions database table created.")
 
-        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test', 'What is the answer to question 1?', 'A', 'B', 'C', 'D', 'Answer 1', 'Easy', '25.00')''')
-        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test', 'What is the answer to question 2?', 'A', 'B', 'C', 'D', 'Answer 2', 'Medium', '50.00')''')
-        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test', 'What is the answer to question 3?', 'A', 'B', 'C', 'D', 'Answer 3', 'Hard', '75.00')''')
+        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test1', 'What is the answer to question 1?', 'A', 'B', 'C', 'D', 'Answer 1', 'Easy', '25.00')''')
+        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test2', 'What is the answer to question 2?', 'A', 'B', 'C', 'D', 'Answer 2', 'Medium', '50.00')''')
+        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test3', 'What is the answer to question 3?', 'A', 'B', 'C', 'D', 'Answer 3', 'Hard', '75.00')''')
         print("* Questions loaded into database table.")
 
         cursor.close()
