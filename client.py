@@ -8,7 +8,22 @@ HOST = '127.0.0.1'
 PORT = 1891
 
 def player(client):
-    pass
+    response = client.recv(2048).decode('utf-8')
+
+    while response != "GAME OVER":
+        # print question and answer choices
+        print(response)
+        print(client.recv(2048).decode('utf-8'))
+
+        # submit answer choice
+        print(client.recv(2048).decode('utf-8'))
+        choice = input("Enter your answer: ")
+        client.send(str.encode(choice))
+        
+        # confirm if player wants to continue
+        print(client.recv(2048).decode('utf-8'))
+        response = input("Enter 'Y' to continue: ")
+        client.send(str.encode(response))
 
 def administrator(client):
     # waiting for game to start
@@ -21,7 +36,7 @@ def administrator(client):
     while True:
         update = client.recv(2048).decode('utf-8')
         print(update)
-        if update.startswith('Game'):
+        if update.startswith("GAME"):
             break
         else:
             update = client.recv(2048).decode('utf-8')
@@ -52,7 +67,8 @@ def start_client(HOST, PORT):
         choice = input("Enter C to create or J to join: ")
         if choice == 'C' or choice == 'J':
             client.send(str.encode(choice))
-            print(client.recv(2048).decode('utf-8'))
+            response = client.recv(2048).decode('utf-8')
+            print(response)
 
             if choice == 'C':
                 while True:
@@ -64,6 +80,8 @@ def start_client(HOST, PORT):
                         administrator(client)
                         break
             else:
+                if response.startswith("No current"):
+                    break
                 while True:
                     id = input("Choose a game ID: ")
                     client.send(str.encode(str(id)))
