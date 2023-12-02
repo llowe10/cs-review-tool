@@ -8,22 +8,30 @@ HOST = '127.0.0.1'
 PORT = 1891
 
 def player(client):
-    response = client.recv(2048).decode('utf-8')
-
-    while response != "GAME OVER":
+    while True:
         # print question and answer choices
-        print(response)
+        question = client.recv(2048).decode('utf-8')
+        print(question)
+        if question == "GAME OVER":
+            break
         print(client.recv(2048).decode('utf-8'))
 
         # submit answer choice
-        print(client.recv(2048).decode('utf-8'))
+        #update = client.recv(2048).decode('utf-8')
+        #while update == "Waiting...":
+        #    update = client.recv(2048).decode('utf-8')
         choice = input("Enter your answer: ")
         client.send(str.encode(choice))
-        
-        # confirm if player wants to continue
         print(client.recv(2048).decode('utf-8'))
+
+        # print answer and scoreboard
+        print(client.recv(2048).decode('utf-8')) 
+        print(client.recv(2048).decode('utf-8'))
+
+        # confirm if player wants to continue
         response = input("Enter 'Y' to continue: ")
-        client.send(str.encode(response))
+        if response != 'Y':
+            break
 
 def administrator(client):
     # waiting for game to start

@@ -21,7 +21,9 @@ games = {} # {game ID: topic}
 gameRooms = {} # {game ID: [client objects for each player]}
 gamesInSession = [] # [game IDs for games currently in session]
 scores = {} # {player username: score}
-responseQueue = [] # [(player username, response)]
+responses = {} # {game ID: [(player username, response)]}
+responseMutex = allocate_lock()
+confirmationMutex = allocate_lock()
 
 class Client:
     def __init__(self, conn, addr, username):
@@ -43,8 +45,6 @@ class Client:
         return self.gameID
 
 def play_game(player: Client):
-    responseMutex = allocate_lock()
-    confirmationMutex = allocate_lock()
     connection = player.getConnection()
     username = player.getUsername()
     gameID = player.getGameID()
@@ -56,24 +56,29 @@ def play_game(player: Client):
     # game has started
     while gameID in gamesInSession:
         while responseMutex.locked():
+            #connection.sendall(str.encode("Waiting..."))
             time.sleep(0.1)
         
         # get responses from player (one player at a time)
         responseMutex.acquire()
-        connection.sendall(str.encode("What's your answer?"))
+        #connection.sendall(str.encode("Ready for response"))
         response = connection.recv(2048).decode('utf-8')
-        responseQueue.append((username, response))
+        responses[gameID].append((username, response))
         responseMutex.release()
 
+        #while confirmationMutex.locked():
+        #    connection.sendall(str.encode("Waiting..."))
+        #    time.sleep(0.1)
+
         # check if player wants to continue
-        confirmationMutex.acquire()
-        connection.sendall(str.encode("Do you want to continue?"))
-        confirmation = connection.recv(2048).decode('utf-8')
-        if confirmation != 'Y':
-            player.setGameID(None)
-            gameRooms[gameID].remove(player)
-            del scores[username]
-        confirmationMutex.release()
+        #confirmationMutex.acquire()
+        #connection.sendall(str.encode("Ready for response"))
+        #confirmation = connection.recv(2048).decode('utf-8')
+        #if confirmation != 'Y':
+        #    player.setGameID(None)
+        #    gameRooms[gameID].remove(player)
+        #    del scores[username]
+        #confirmationMutex.release()
 
 def join_game(player: Client, games: dict):
     connection = player.getConnection()
@@ -164,25 +169,27 @@ def administrate_game(admin: Client):
             choices = answerChoices[i]
             answer = correctAnswers[i]
             pts = points[i]
+            responses[gameID] = []
 
             # send update to admin
-            adminConn.sendall(str.encode(f'Question {i+1}: ' + question))
+            adminConn.sendall(str.encode(f'Question {i+1}: ' + question + '\n'))
 
             # broadcast question and answer choices
             for j in range(len(playersList)):
                 player: Client = playersList[j]
                 playerConn = player.getConnection()
-
-                playerConn.sendall(str.encode(f'Question {i+1}: ' + question))
+                playerConn.sendall(str.encode(f'Question {i+1}: ' + question + '\n'))
                 playerConn.sendall(str.encode(choices))
             
-            # wait for responses
+            # wait for all players to respond
             adminConn.sendall(str.encode("Waiting for responses..."))
-            time.sleep(30)
+            while len(responses[gameID]) != len(gameRooms[gameID]):
+                #time.sleep(0.1)
+                continue
 
             # bonus given to first 3 players to respond correctly
             bonusGiven = 0
-            for tup in responseQueue:
+            for tup in responses[gameID]:
                 if tup[1] == answer:
                     scores[tup[0]] += pts
 
@@ -199,7 +206,6 @@ def administrate_game(admin: Client):
             for i in range(len(playersList)):
                 player: Client = playersList[i]
                 playerConn = player.getConnection()
-
                 playerConn.sendall(str.encode(answer))
                 playerConn.sendall(str.encode(get_scoreboard()))
             
@@ -208,6 +214,10 @@ def administrate_game(admin: Client):
         # TODO: determine what to do once game ends
         gamesInSession.remove(gameID)
         adminConn.sendall(str.encode("GAME OVER"))
+        for i in range(len(playersList)):
+            player: Client = playersList[i]
+            playerConn = player.getConnection()
+            playerConn.sendall("GAME OVER")
             
         cursor.close()
     except sqlite3.Error as error:
