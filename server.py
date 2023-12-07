@@ -90,7 +90,7 @@ def join_game(player: Client, games: dict):
                 availGames += (str(id) + " -- " + games[id] + "\n")
             else:
                 del games[id]
-        connection.sendall(str.encode(f'Available games:\n{availGames}'))
+        connection.sendall(str.encode(f'\nAvailable games:\n{availGames}'))
 
         # capture game session ID
         while True:
@@ -108,7 +108,8 @@ def get_scoreboard():
     # sort scoreboard from highest to lowest score
     rankings = sorted(scores.items(), key = lambda x: x[1], reverse = True)
     
-    scoreboard = "SCOREBOARD".center(30, " ")
+    scoreboard = "\n"
+    scoreboard += "SCOREBOARD".center(30, " ")
     scoreboard += "\nPLAYER".ljust(15, " ")
     scoreboard += "SCORE".rjust(15, " ")
     scoreboard += "\n"
@@ -166,19 +167,29 @@ def administrate_game(admin: Client):
             pts = points[i]
 
             # send update to admin
-            adminConn.sendall(str.encode(f'Question {i+1}: ' + question))
+            adminConn.sendall(str.encode(f'\nQuestion {i+1}: ' + question))
 
             # broadcast question and answer choices
             for j in range(len(playersList)):
                 player: Client = playersList[j]
                 playerConn = player.getConnection()
-
-                playerConn.sendall(str.encode(f'Question {i+1}: ' + question))
-                playerConn.sendall(str.encode(choices))
+                playerConn.sendall(str.encode(f'\nQuestion {i+1}: ' + question + f"\n{choices}"))
             
             # wait for responses
             adminConn.sendall(str.encode("Waiting for responses..."))
             time.sleep(30)
+
+            # get question responses from players
+            for j in range(len(playersList)):
+                player: Client = playersList[j]
+                username = player.getUsername()
+                playerConn = player.getConnection()
+
+                responseMutex = allocate_lock()
+                responseMutex.acquire()
+                response = playerConn.recv(2048).decode('utf-8')
+                responseQueue.append((username, response))
+                responseMutex.release()
 
             # bonus given to first 3 players to respond correctly
             bonusGiven = 0
@@ -200,15 +211,38 @@ def administrate_game(admin: Client):
                 player: Client = playersList[i]
                 playerConn = player.getConnection()
 
-                playerConn.sendall(str.encode(answer))
-                playerConn.sendall(str.encode(get_scoreboard()))
-            
-            # TODO: account for users leaving the game
+                playerConn.sendall(str.encode(f"{answer}" + "\n" + get_scoreboard()))
+                confirmation = playerConn.recv(2048).decode('utf-8')
 
-        # TODO: determine what to do once game ends
-        gamesInSession.remove(gameID)
-        adminConn.sendall(str.encode("GAME OVER"))
+                # check if player wants to continue
+                confirmationMutex = allocate_lock()
+                confirmationMutex.acquire()
+                if confirmation != 'Y':
+                    # TODO: account for users leaving the game
+                    # player.setGameID(None)
+                    # gameRooms[gameID].remove(player)
+                    # del scores[username]
+                    playerConn.sendall(str.encode("\nLeaving game server. Thanks for playing!"))
+                confirmationMutex.release()
+
+        # determine what to do once game ends
+        for i in range(len(playersList)):
+            player: Client = playersList[i]
+            playerConn = player.getConnection()
+
+            playerConn.sendall(str.encode("\nGAME OVER. How do you wish to proceed?"))
+            next_step = playerConn.recv(2048).decode('utf-8')
             
+            if next_step.startswith("1"):
+                playerConn.sendall(str.encode(f"\nRestarting game {gameID}..."))
+                # TODO: add functionality to restart game
+            elif next_step.startswith("2"):
+                playerConn.sendall(str.encode(f"\nChoose a new game to join..."))
+                # TODO: add functionality to join a new game
+            else:
+                playerConn.sendall(str.encode("\nLeaving game server. Thanks for playing!"))
+
+        adminConn.sendall(str.encode("GAME OVER."))        
         cursor.close()
     except sqlite3.Error as error:
         print("Error occurred -", error)
@@ -219,7 +253,7 @@ def create_game(client: Client):
         connection = client.getConnection()
 
         # get available topics
-        cursor.execute("SELECT Topic FROM QUESTIONS;")
+        cursor.execute("SELECT DISTINCT Topic FROM QUESTIONS;")
         result = cursor.fetchall()
         for tup in result:
             topics.append(tup[0])
@@ -227,8 +261,8 @@ def create_game(client: Client):
         # list available game topics to client
         avail_topics = ""
         for top in topics:
-            avail_topics += (top + "\n")
-        connection.sendall(str.encode(f'Available topics:\n{avail_topics}'))
+            avail_topics += ("-> " + top + "\n")
+        connection.sendall(str.encode(f'\nAvailable topics:\n{avail_topics}'))
 
         # capture game topic from client
         while True:
@@ -297,7 +331,6 @@ def start_server(HOST, PORT):
     ss.listen()
 
     load_questions()
-    # get_questions()
 
     while True:
         accept_connections(ss)
@@ -324,34 +357,18 @@ def load_questions():
         cursor.execute(create_questions_table)
         print("* Questions database table created.")
 
-        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test1', 'What is the answer to question 1?', 'A', 'B', 'C', 'D', 'Answer 1', 'Easy', '25.00')''')
-        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test2', 'What is the answer to question 2?', 'A', 'B', 'C', 'D', 'Answer 2', 'Medium', '50.00')''')
-        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test3', 'What is the answer to question 3?', 'A', 'B', 'C', 'D', 'Answer 3', 'Hard', '75.00')''')
+        # Processes
+        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Processes', 'Which scheduler is invoked frequently and must be fast?', 'A) Short-term / CPU', 'B) Medium-term', 'C) Long-term / Job', 'D) Process', 'A', 'Easy', '25.00')''')
+        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Processes', 'What is a socket?', 'A) A program in execution', 'B) Information associated with a process', 'C) An endpoint for communication', 'D) Something to identify and manage a process', 'C', 'Medium', '50.00')''')
+        # Memory Management
+        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Memory Management', 'Which storage allocation scheme refers to allocating the smallest hole that is big enough for a process to be stored?', 'A) First-fit', 'B) Best-fit', 'C) Worst-fit', 'D) Segmentation', 'B', 'Medium', '50.00')''')
+        # Intro to OS
+        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Operating Systems', 'Why is direct memory access important?', 'A) It allows I/O devices to transmit at higher speeds', 'B) It is used to transfer data to secondary memory', 'C) It serves as a secondary cache', 'D) It is necessary for addressing interrupts', 'A', 'Hard', '75.00')''')
         print("* Questions loaded into database table.")
 
         cursor.close()
     except sqlite3.Error as error:
         print('Error occurred - ', error)
-
-def get_questions():
-    try:
-        cursor = dbconnection.cursor()
-
-        get_questions = 'SELECT * FROM QUESTIONS;'
-        cursor.execute(get_questions)
-
-        questions = cursor.fetchall()
-        print('\nQuestions:')
-        for q in questions:
-            print(q)
-        print()
-
-        cursor.close()
-    except sqlite3.Error as error:
-        print('Error occurred - ', error)
-    finally:
-        if dbconnection:
-            dbconnection.close()
 
 if __name__ == "__main__":
     start_server(HOST, PORT)

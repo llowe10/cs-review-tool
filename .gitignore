@@ -48,4 +48,4 @@ env.bak/
 venv.bak/
 
 # databases
-*.db
+*game.db*
