@@ -8,12 +8,12 @@ HOST = '127.0.0.1'
 PORT = 1891
 
 def player(client):
-    # while response != "GAME OVER":
     while True:
         # print question and answer choices
         question = client.recv(2048).decode('utf-8')
         print(question)
-        # print(client.recv(2048).decode('utf-8'))
+        if "GAME OVER" in question:
+            break
 
         # submit answer choice
         choice = input("Enter your answer: ")
@@ -22,20 +22,17 @@ def player(client):
         # confirm if player wants to continue
         answer = client.recv(2048).decode('utf-8')
         print(f"Correct Answer: {answer}")
-
-        message = client.recv(2048).decode('utf-8')
-        print(f"{message}")
-
-        # proceed = client.recv(2048).decode('utf-8')
-        # print(f"\n{proceed}")
-        if "GAME OVER" in message:
+        if "GAME OVER" in answer:
             break
 
         continue_msg = input("\nEnter 'Y' to continue: ")
         client.send(str.encode(continue_msg))
+        if continue_msg != 'Y':
+            print(client.recv(2048).decode('utf-8'))
 
     proceed = input("\nEnter\n-> '1' to play again\n-> '2' to join a new game\n-> '3' to leave the server\n: ")
     client.send(str.encode(proceed))
+    print(client.recv(2048).decode('utf-8'))
 
 def administrator(client):
     # waiting for game to start
@@ -49,10 +46,6 @@ def administrator(client):
         update = client.recv(2048).decode('utf-8')
         print(f"\n{update}")
         if update.startswith("GAME"):
-            # next_step = client.recv(2048).decode('utf-8')
-            # print(next_step)
-            # response = input("Enter '1' to play again, '2' to join a new game, or '3' to leave the server: ")
-            # client.send(str.encode(response))
             break
         else:
             update = client.recv(2048).decode('utf-8')
