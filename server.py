@@ -370,25 +370,5 @@ def load_questions():
     except sqlite3.Error as error:
         print('Error occurred - ', error)
 
-# def get_questions():
-#     try:
-#         cursor = dbconnection.cursor()
-
-#         get_questions = 'SELECT * FROM QUESTIONS;'
-#         cursor.execute(get_questions)
-
-#         questions = cursor.fetchall()
-#         print('\nQuestions:')
-#         for q in questions:
-#             print(q)
-#         print()
-
-#         cursor.close()
-#     except sqlite3.Error as error:
-#         print('Error occurred - ', error)
-#     finally:
-#         if dbconnection:
-#             dbconnection.close()
-
 if __name__ == "__main__":
     start_server(HOST, PORT)
