@@ -108,7 +108,7 @@ def get_scoreboard():
     # sort scoreboard from highest to lowest score
     rankings = sorted(scores.items(), key = lambda x: x[1], reverse = True)
     
-    scoreboard = "SCOREBOARD".center(30, " ")
+    scoreboard = "\nSCOREBOARD".center(30, " ")
     scoreboard += "\nPLAYER".ljust(15, " ")
     scoreboard += "SCORE".rjust(15, " ")
     scoreboard += "\n"
@@ -166,7 +166,7 @@ def administrate_game(admin: Client):
             pts = points[i]
 
             # send update to admin
-            adminConn.sendall(str.encode(f'Question {i+1}: ' + question))
+            adminConn.sendall(str.encode(f'\nQuestion {i+1}: ' + question))
 
             # broadcast question and answer choices
             for j in range(len(playersList)):
@@ -205,9 +205,29 @@ def administrate_game(admin: Client):
             
             # TODO: account for users leaving the game
 
-        # TODO: determine what to do once game ends
-        gamesInSession.remove(gameID)
-        adminConn.sendall(str.encode("GAME OVER"))
+        # determine what to do once game ends
+        for i in range(len(playersList)):
+            player: Client = playersList[i]
+            playerConn = player.getConnection()
+
+            playerConn.sendall(str.encode("\nGAME OVER. How do you wish to proceed?"))
+            next_step = playerConn.recv(2048).decode('utf-8')
+            if next_step.startswith("1"):
+                print(f"Restarting game {gameID}...")
+            else:
+                playerConn.sendall(str.encode("\nLeaving game server. Thanks for playing!"))
+                # print(f"Leaving game {gameID}.")
+                pass
+
+        adminConn.sendall(str.encode("GAME OVER."))
+
+        # next_step = adminConn.recv(2048).decode('utf-8')
+        # if next_step.startswith("Play"):
+        #     print(f"Restarting game {gameID}...")
+        # else:
+        #     print(f"Ending game {gameID}.")
+        #     gamesInSession.remove(gameID)
+        # adminConn.sendall(str.encode("How do you wish to proceed?"))
             
         cursor.close()
     except sqlite3.Error as error:

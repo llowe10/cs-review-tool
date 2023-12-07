@@ -10,20 +10,33 @@ PORT = 1891
 def player(client):
     response = client.recv(2048).decode('utf-8')
 
-    while response != "GAME OVER":
+    # while response != "GAME OVER":
+    while True:
         # print question and answer choices
         print(response)
         print(client.recv(2048).decode('utf-8'))
 
         # submit answer choice
-        print(client.recv(2048).decode('utf-8'))
         choice = input("Enter your answer: ")
         client.send(str.encode(choice))
         
         # confirm if player wants to continue
-        print(client.recv(2048).decode('utf-8'))
-        response = input("Enter 'Y' to continue: ")
+        answer = client.recv(2048).decode('utf-8')
+        print(f"Correct Answer: {answer}")
+
+        message = client.recv(2048).decode('utf-8')
+        print(f"{message}")
+
+        # proceed = client.recv(2048).decode('utf-8')
+        # print(f"\n{proceed}")
+        if "GAME OVER" in message:
+            break
+
+        response = input("\nEnter 'Y' to continue: ")
         client.send(str.encode(response))
+
+    proceed = input("\nEnter\n-> '1' to play again\n-> '2' to join a new game\n-> '3' to leave the server\n: ")
+    client.send(str.encode(proceed))
 
 def administrator(client):
     # waiting for game to start
@@ -35,8 +48,12 @@ def administrator(client):
     # sending updates as game progresses
     while True:
         update = client.recv(2048).decode('utf-8')
-        print(update)
+        print(f"\n{update}")
         if update.startswith("GAME"):
+            # next_step = client.recv(2048).decode('utf-8')
+            # print(next_step)
+            # response = input("Enter '1' to play again, '2' to join a new game, or '3' to leave the server: ")
+            # client.send(str.encode(response))
             break
         else:
             update = client.recv(2048).decode('utf-8')
