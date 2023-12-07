@@ -108,7 +108,8 @@ def get_scoreboard():
     # sort scoreboard from highest to lowest score
     rankings = sorted(scores.items(), key = lambda x: x[1], reverse = True)
     
-    scoreboard = "\nSCOREBOARD".center(30, " ")
+    scoreboard = "\n"
+    scoreboard += "SCOREBOARD".center(30, " ")
     scoreboard += "\nPLAYER".ljust(15, " ")
     scoreboard += "SCORE".rjust(15, " ")
     scoreboard += "\n"
@@ -173,8 +174,8 @@ def administrate_game(admin: Client):
                 player: Client = playersList[j]
                 playerConn = player.getConnection()
 
-                playerConn.sendall(str.encode(f'Question {i+1}: ' + question))
-                playerConn.sendall(str.encode(choices))
+                playerConn.sendall(str.encode(f'\nQuestion {i+1}: ' + question + f"\n{choices}"))
+                # playerConn.sendall(str.encode(choices))
             
             # wait for responses
             adminConn.sendall(str.encode("Waiting for responses..."))
@@ -239,7 +240,7 @@ def create_game(client: Client):
         connection = client.getConnection()
 
         # get available topics
-        cursor.execute("SELECT Topic FROM QUESTIONS;")
+        cursor.execute("SELECT DISTINCT Topic FROM QUESTIONS;")
         result = cursor.fetchall()
         for tup in result:
             topics.append(tup[0])
@@ -344,9 +345,11 @@ def load_questions():
         cursor.execute(create_questions_table)
         print("* Questions database table created.")
 
-        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test1', 'What is the answer to question 1?', 'A', 'B', 'C', 'D', 'Answer 1', 'Easy', '25.00')''')
-        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test2', 'What is the answer to question 2?', 'A', 'B', 'C', 'D', 'Answer 2', 'Medium', '50.00')''')
-        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test3', 'What is the answer to question 3?', 'A', 'B', 'C', 'D', 'Answer 3', 'Hard', '75.00')''')
+        # Processes
+        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Processes', 'Which scheduler is invoked frequently and must be fast?', 'A) Short-term / CPU', 'B) Medium-term', 'C) Long-term / Job', 'D) Process', 'A', 'Easy', '25.00')''')
+        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Processes', 'What is a socket?', 'A) A program in execution', 'B) Information associated with a process', 'C) An endpoint for communication', 'D) Something to identify and manage a process', 'C', 'Medium', '50.00')''')
+        # Test
+        cursor.execute('''INSERT INTO QUESTIONS (Topic, Question, Choice_A, Choice_B, Choice_C, Choice_D, Answer, Difficulty, Points) VALUES ('Test', 'What is the answer to question 3?', 'A', 'B', 'C', 'D', 'C', 'Hard', '75.00')''')
         print("* Questions loaded into database table.")
 
         cursor.close()
